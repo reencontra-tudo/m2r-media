@@ -15,9 +15,16 @@ aquele documento antes de mexer aqui — este repo é a implementação do que j
   aprovação), `media_assets` (o asset em si), `media_targets` (onde/como cada asset é
   publicado — um asset pode ir pra vários alvos), `media_engagement_snapshots` (métricas
   agregadas por período, nunca tempo real).
-- `0002_seed_backfindr_personas.sql` — seed real das 6 personas do Backfindr (Page IDs
-  confirmados ao vivo contra o node do n8n, 31/08/2026) + 3 linhas pendentes do NEXT
+- `0002_seed_backfindr_personas.sql` — seed real das 6 personas de nicho do Backfindr (Page
+  IDs confirmados ao vivo contra o node do n8n, 31/08/2026) + 3 linhas pendentes do NEXT
   (Jack Chicken, Dona Arlinda, Mestre das Coisas Importantes) sem `account_ref` ainda.
+- `0003_add_backfindr_brand_persona.sql` — 7ª persona do Backfindr, nível marca (`backfindr`,
+  distinta das 6 de nicho): mesma Página do Facebook já usada por `geral`/`protect`
+  (renomeada de "Webjetos Roubados e Perdidos" pra "Backfindr" em 31/08/2026), Instagram
+  @backfindroficial confirmado nativamente vinculado a essa Página mas ainda não incluído
+  em `default_targets` (decisão em aberto). Completa as 7 personas de referência do
+  Backfindr (6 nicho + 1 marca) pra servir de exemplo quando Jack Chicken/Dona
+  Arlinda/Mestre tiverem acesso Meta resolvido.
 
 Banco: Postgres (projeto Supabase dedicado, separado do Backfindr — decisão 31/08/2026,
 mantém a Central de Mídia desacoplada de um produto só).
