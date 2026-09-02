@@ -11,31 +11,25 @@
 # separação existe pra remover. Aqui toda configuração vem de variável de ambiente
 # do Railway — nada de URL fixa na imagem.
 #
-# O truque de dropar privilégio abaixo é a mesma solução que o n8n-railway descobriu na
-# marra: o volume do Railway monta como root, e o n8n roda como usuário `node`, então sem
-# o chown o container morre com EACCES ao tentar escrever em /home/node/.n8n.
+# Sobre o gosu: o volume do Railway monta como root e o n8n roda como usuário `node`;
+# sem um chown no boot o container morre com EACCES ao escrever em /home/node/.n8n
+# (mesmo problema que o n8n-railway resolveu na marra). Dropar privilégio precisa de um
+# helper, e a imagem oficial do n8n não tem gerenciador de pacotes nenhum — já tentamos
+# apt-get ("not found", ela é Alpine) e apk (também não existe, é base mínima). Por isso
+# o binário estático vem de um estágio separado: não depende da distro nem da libc da
+# imagem base, então sobrevive às trocas de base image que o n8n faz de tempos em tempos.
+
+FROM alpine:3 AS gosu
+ARG TARGETARCH
+RUN apk add --no-cache curl \
+ && curl -fsSL -o /gosu "https://github.com/tianon/gosu/releases/download/1.17/gosu-${TARGETARCH}" \
+ && chmod +x /gosu
 
 FROM n8nio/n8n:latest
 
 USER root
 
-# Ajusta permissão do volume como root e depois dropa pro usuário node preservando PID 1
-# (shutdown gracioso do n8n continua funcionando).
-#
-# A imagem oficial do n8n já trocou de base mais de uma vez (Alpine → Debian → Alpine;
-# a tentativa anterior deste Dockerfile quebrou com "apt-get: not found"). Por isso o
-# install detecta o gerenciador de pacotes em vez de assumir um: su-exec no Alpine,
-# gosu no Debian.
-RUN if command -v apk >/dev/null 2>&1; then \
-        apk add --no-cache su-exec; \
-    elif command -v apt-get >/dev/null 2>&1; then \
-        apt-get update \
-        && apt-get install -y --no-install-recommends gosu \
-        && rm -rf /var/lib/apt/lists/*; \
-    else \
-        echo "ERRO: nem apk nem apt-get na imagem base do n8n" >&2; exit 1; \
-    fi
-
+COPY --from=gosu /gosu /usr/local/bin/gosu
 COPY infra/n8n/docker-entrypoint.sh /m2r-entrypoint.sh
 RUN chmod +x /m2r-entrypoint.sh
 

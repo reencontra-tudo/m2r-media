@@ -10,13 +10,5 @@ chown -R node:node /home/node/.n8n
 # legível por outros usuários — ele guarda a chave de criptografia das credenciais ali.
 chmod -R 700 /home/node/.n8n
 
-# su-exec (Alpine) ou gosu (Debian) — ver comentário no Dockerfile sobre a imagem
-# base do n8n trocar de distro de tempos em tempos.
-if command -v su-exec >/dev/null 2>&1; then
-    exec su-exec node n8n start
-elif command -v gosu >/dev/null 2>&1; then
-    exec gosu node n8n start
-else
-    echo "ERRO: nem su-exec nem gosu disponíveis para dropar privilégio" >&2
-    exit 1
-fi
+# gosu vem do estágio de build (binário estático) — ver comentário no Dockerfile.
+exec gosu node n8n start
