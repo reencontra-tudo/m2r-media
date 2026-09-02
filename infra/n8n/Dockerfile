@@ -11,19 +11,30 @@
 # separação existe pra remover. Aqui toda configuração vem de variável de ambiente
 # do Railway — nada de URL fixa na imagem.
 #
-# O truque do gosu abaixo é a mesma solução que o n8n-railway descobriu na marra: o
-# volume do Railway monta como root, e o n8n roda como usuário `node`, então sem o
-# chown o container morre com EACCES ao tentar escrever em /home/node/.n8n.
+# O truque de dropar privilégio abaixo é a mesma solução que o n8n-railway descobriu na
+# marra: o volume do Railway monta como root, e o n8n roda como usuário `node`, então sem
+# o chown o container morre com EACCES ao tentar escrever em /home/node/.n8n.
 
 FROM n8nio/n8n:latest
 
 USER root
 
-# gosu: ajusta permissão do volume como root e depois dropa pro usuário node,
-# preservando PID 1 (shutdown gracioso do n8n continua funcionando).
-RUN apt-get update \
- && apt-get install -y --no-install-recommends gosu \
- && rm -rf /var/lib/apt/lists/*
+# Ajusta permissão do volume como root e depois dropa pro usuário node preservando PID 1
+# (shutdown gracioso do n8n continua funcionando).
+#
+# A imagem oficial do n8n já trocou de base mais de uma vez (Alpine → Debian → Alpine;
+# a tentativa anterior deste Dockerfile quebrou com "apt-get: not found"). Por isso o
+# install detecta o gerenciador de pacotes em vez de assumir um: su-exec no Alpine,
+# gosu no Debian.
+RUN if command -v apk >/dev/null 2>&1; then \
+        apk add --no-cache su-exec; \
+    elif command -v apt-get >/dev/null 2>&1; then \
+        apt-get update \
+        && apt-get install -y --no-install-recommends gosu \
+        && rm -rf /var/lib/apt/lists/*; \
+    else \
+        echo "ERRO: nem apk nem apt-get na imagem base do n8n" >&2; exit 1; \
+    fi
 
 COPY infra/n8n/docker-entrypoint.sh /m2r-entrypoint.sh
 RUN chmod +x /m2r-entrypoint.sh
