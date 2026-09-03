@@ -1,0 +1,859 @@
+{
+  "name": "Central de Mídia — AutoPost (multi-conta, cópia de teste)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Central de Mídia — AutoPost multi-conta (CÓPIA DE TESTE, NÃO ATIVA)\n\nGeneraliza \"Backfindr AutoPost — Facebook\" pra ler contas de `media_personas` (Supabase do m2r-media) em vez de nichos/Page IDs hardcoded. NÃO tocar no workflow de produção original — esta é uma cópia isolada.\n\n**⚠️ 5 nodes Postgres foram DESATIVADOS de propósito** (Buscar persona ativa, Registrar media_assets IA, Auto-aprovar asset, Registrar media_target Facebook/Instagram): a criação automática do workflow atribuiu a credencial errada a eles (\"Postgres account\", que é do Backfindr) em vez de apontar pro banco novo do m2r-media. Reativar só depois de trocar a credencial de cada um pra uma que aponte pro projeto Supabase `m2r-media` (host/porta/user/senha — no painel Supabase, projeto `m2r-media`, ref `giwhpnrxvfzvsohsmbew`).\n\n**Antes de ativar, preencher:**\n1. Credencial Postgres correta (m2r-media) nos 5 nodes desativados acima, depois reativar cada um.\n2. Node \"Montar mapa de tokens conhecidos\" — colar os tokens reais do Meta (mesmos já usados no workflow original). Melhor ainda: mover pro cofre de credenciais do n8n de vez (pendência de segurança já registrada em BACKFINDR.md §17) — inclui agora também o token da página Backfindr/ex-Webjetos (mesmo token já usado por geral/protect, sem gerar nada novo).\n3. Credenciais \"OpenAI account\" e \"S3 account\" já foram atribuídas certas (mesmas do workflow original) — só confirmar.\n\n**Como funciona:** sorteia 1 persona com `default_targets` preenchido — hoje as 7 personas de referência do Backfindr (6 de nicho + 1 de marca, `backfindr`, adicionada 31/08/2026 — mesma Página já usada por geral/protect, só renomeada pra \"Backfindr\"). Jack Chicken/Dona Arlinda/Mestre ficam de fora do sorteio até Marcos conectar as páginas, sem precisar mexer neste workflow. Se já existe um asset `manual_upload` pendente pra essa persona, publica ele; senão gera via IA (persona `backfindr` usa o mesmo estilo de conteúdo de `geral`). Respeita `requires_approval` por persona antes de publicar. Publica em cada alvo de `default_targets` (Facebook e/ou Instagram).",
+        "height": 200,
+        "width": 780,
+        "color": 5
+      },
+      "id": "591af597-059e-4330-883d-45b9aa54d0a7",
+      "name": "Sticky Note 066da8f6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "daysInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "d957fb14-27ef-44d3-8452-0867400205de",
+      "name": "Cron (5 dias)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with chosen as (\n  select persona_slug, product_slug, display_name, requires_approval, default_targets\n  from media_personas\n  where jsonb_array_length(default_targets) > 0\n  order by random()\n  limit 1\n)\nselect\n  c.persona_slug, c.product_slug, c.display_name, c.requires_approval, c.default_targets,\n  pa.id as pending_asset_id, pa.storage_bucket as pending_storage_bucket,\n  pa.storage_key as pending_storage_key, pa.category as pending_category\nfrom chosen c\nleft join lateral (\n  select id, storage_bucket, storage_key, category\n  from media_assets\n  where persona_slug = c.persona_slug and status = 'generated' and generation_source = 'manual_upload'\n  order by created_at asc\n  limit 1\n) pa on true;",
+        "options": {}
+      },
+      "id": "b36b9203-72f2-4781-910a-23a24054fa38",
+      "name": "Buscar persona ativa + asset pendente",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nconst hasManualAsset = row.pending_asset_id != null;\nlet niche = null;\nif (row.persona_slug === 'backfindr') {\n  // persona de marca (mesma Page ID de \"geral\") — usa o mesmo estilo de conteúdo de geral\n  niche = 'geral';\n} else if (row.persona_slug && row.persona_slug.startsWith('backfindr-')) {\n  niche = row.persona_slug.replace('backfindr-', '');\n}\nreturn [{\n  json: {\n    persona_slug: row.persona_slug,\n    product_slug: row.product_slug,\n    display_name: row.display_name,\n    requires_approval: row.requires_approval,\n    default_targets: row.default_targets,\n    niche,\n    city: 'São Paulo',\n    has_manual_asset: hasManualAsset,\n    pending_asset_id: row.pending_asset_id,\n    pending_storage_bucket: row.pending_storage_bucket,\n    pending_storage_key: row.pending_storage_key,\n    pending_category: row.pending_category\n  }\n}];"
+      },
+      "id": "46b6755f-86cd-4e1f-99c6-ba9cea8afec4",
+      "name": "Selecionar persona e decidir origem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.has_manual_asset }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3a27a857-4cf0-412f-9335-1b8cb4c99e5e",
+      "name": "Tem asset manual pendente?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "bucketName": "={{ $json.pending_storage_bucket }}",
+        "fileKey": "={{ $json.pending_storage_key }}",
+        "binaryPropertyName": "image"
+      },
+      "id": "bc5ea059-e1b9-40bd-9f72-14cf2695ea6d",
+      "name": "Baixar asset manual do R2",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        960,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Selecionar persona e decidir origem').item.json;\nreturn [{\n  json: {\n    asset_id: ctx.pending_asset_id,\n    storage_bucket: ctx.pending_storage_bucket,\n    storage_key: ctx.pending_storage_key,\n    persona_slug: ctx.persona_slug,\n    product_slug: ctx.product_slug,\n    display_name: ctx.display_name,\n    requires_approval: ctx.requires_approval,\n    default_targets: ctx.default_targets,\n    caption: '',\n    source: 'manual_upload'\n  },\n  binary: $input.first().binary\n}];"
+      },
+      "id": "f373699f-4a9e-4a43-a876-c074067983af",
+      "name": "Preparar contexto (asset manual)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c93d5dee-fd94-40e2-8db6-abcee9329fa0",
+      "name": "Convergir origem do asset",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    { \"role\": \"system\", \"content\": \"Você é um morador real de {{ $json.city }} desabafando no Facebook. Siga rigorosamente as regras: 1) SITUAÇÃO: nicho 'veiculo' e 'bicicleta'→SEMPRE roubado/furtado, NUNCA perdido; 'celular'→perdido OU roubado (varie aleatoriamente); 'pet'→SEMPRE perdido; 'geral'→SEMPRE perdido ou roubado (varie); 'protect'→dono preocupado que AINDA NÃO perdeu nada mas viu casos de furto/roubo ao redor e decidiu proteger seus objetos com QR code preventivo. 2) ESTILO: 3-4 linhas, tom informal e urgente, pessoa real, NUNCA pareça propaganda, termine com CTA natural e o link https://backfindr.com. 3) IMAGEM: descricao_visual deve ser cena urbana brasileira emocional e realista — sem texto na imagem. Responda APENAS com JSON: {texto_post, descricao_visual}.\" },\n    { \"role\": \"user\", \"content\": \"Crie um post para o nicho {{ $json.niche }} em {{ $json.city }}.\" }\n  ],\n  \"response_format\": { \"type\": \"json_object\" }\n}",
+        "options": {}
+      },
+      "id": "8af97b84-14aa-4cd8-80dd-78f3fa6f84e6",
+      "name": "Gerar texto do post (GPT-4o-mini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        960,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $('Gerar texto do post (GPT-4o-mini)').item.json.choices[0].message.content;\nlet response;\ntry {\n  response = JSON.parse(content);\n} catch (e) {\n  response = { texto_post: content, descricao_visual: 'Uma cena urbana realista em ' + $('Selecionar persona e decidir origem').item.json.city };\n}\nreturn [{\n  json: {\n    text: response.texto_post,\n    visual_description: response.descricao_visual,\n    niche: $('Selecionar persona e decidir origem').item.json.niche,\n    city: $('Selecionar persona e decidir origem').item.json.city\n  }\n}];"
+      },
+      "id": "8cc985a7-e0ce-4e14-8b62-b282c4626a3f",
+      "name": "Extrair texto e visual",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/images/generations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "gpt-image-1"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ \"FOTOGRAFIA REALISTA DE SMARTPHONE NO BRASIL. CENA: \" + $json.visual_description + \" em \" + $json.city + \". CLIMA: \" + [\"dia ensolarado\", \"tarde nublada\", \"noite\", \"manhã\"][$now.second % 4] + \". ESTILO: \" + [\"plano fechado\", \"plano aberto\", \"ângulo de cima\", \"altura dos olhos\", \"através de vidro\", \"contraluz\"][$now.minute % 6] + \". ILUMINAÇÃO: \" + [\"luz natural suave\", \"luz dura de meio-dia\", \"luz quente de fim de tarde\", \"luz artificial de rua à noite\"][$now.hour % 4] + \". REGRAS: SEM TEXTO NA IMAGEM, foto amadora, registro espontâneo, arquitetura brasileira real. PROIBIDO: estética de IA, perfeição, logos ou escrita.\" }}"
+            },
+            {
+              "name": "size",
+              "value": "1024x1024"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f446d3ed-b289-4046-a677-9cd148905b34",
+      "name": "Gerar imagem (gpt-image-1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1440,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\nconst b64 = $input.first().json.data[0].b64_json;\nconst buffer = Buffer.from(b64, 'base64');\nconst binary = await this.helpers.prepareBinaryData(buffer, 'image.jpg', 'image/jpeg');\nconst ctx = $('Selecionar persona e decidir origem').item.json;\nconst assetId = uuidv4();\nconst category = ctx.niche || 'geral';\nconst storageKey = ctx.product_slug + '/' + ctx.persona_slug + '/' + category + '/' + assetId + '.jpg';\nreturn [{\n  json: {\n    asset_id: assetId,\n    storage_bucket: 'backfindr-media',\n    storage_key: storageKey,\n    persona_slug: ctx.persona_slug,\n    product_slug: ctx.product_slug,\n    display_name: ctx.display_name,\n    requires_approval: ctx.requires_approval,\n    default_targets: ctx.default_targets,\n    category,\n    caption: $('Extrair texto e visual').item.json.text,\n    source: 'ai:gpt-image-1'\n  },\n  binary: { image: binary }\n}];"
+      },
+      "id": "16aee59d-8828-4e76-9cec-c042d7835058",
+      "name": "Decodificar imagem e montar storage_key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "={{ $json.storage_bucket }}",
+        "fileName": "={{ $json.storage_key }}",
+        "binaryPropertyName": "image",
+        "additionalFields": {
+          "acl": "publicRead"
+        }
+      },
+      "id": "d7be014c-b299-48c8-8a39-5d88374b386b",
+      "name": "Subir asset pro R2 (IA)",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into media_assets (id, product_slug, persona_slug, category, media_type, generation_source, storage_bucket, storage_key, status, created_by_actor_type, created_by_actor_id)\nvalues ('{{ $('Decodificar imagem e montar storage_key').item.json.asset_id }}', '{{ $('Decodificar imagem e montar storage_key').item.json.product_slug }}', '{{ $('Decodificar imagem e montar storage_key').item.json.persona_slug }}', '{{ $('Decodificar imagem e montar storage_key').item.json.category }}', 'image', '{{ $('Decodificar imagem e montar storage_key').item.json.source }}', '{{ $('Decodificar imagem e montar storage_key').item.json.storage_bucket }}', '{{ $('Decodificar imagem e montar storage_key').item.json.storage_key }}', 'generated', 'bot', 'media-hub-autopilot')\nreturning id;",
+        "options": {}
+      },
+      "id": "35b601f8-a0e7-472a-b358-b1cbd5314f67",
+      "name": "Registrar media_assets (IA)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2160,
+        160
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const built = $('Decodificar imagem e montar storage_key').item.json;\nconst inserted = $input.first().json;\nreturn [{\n  json: {\n    asset_id: inserted.id || built.asset_id,\n    storage_bucket: built.storage_bucket,\n    storage_key: built.storage_key,\n    persona_slug: built.persona_slug,\n    product_slug: built.product_slug,\n    display_name: built.display_name,\n    requires_approval: built.requires_approval,\n    default_targets: built.default_targets,\n    caption: built.caption,\n    source: built.source\n  },\n  binary: $('Decodificar imagem e montar storage_key').item.binary\n}];"
+      },
+      "id": "65e3bce0-1e8e-46c0-a32f-783a0fc12411",
+      "name": "Preparar contexto (asset IA)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.requires_approval }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "16077eb5-283f-4dd6-b222-2094000cc443",
+      "name": "Requer aprovação humana?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2880,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d4f0f2fc-117a-4fb5-9c9f-6f7894ca7ba1",
+      "name": "Aguardando aprovação manual (sem publicar)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update media_assets set status = 'approved' where id = '{{ $json.asset_id }}';",
+        "options": {}
+      },
+      "id": "fbf4b70d-6d20-4cc2-b6c0-c10f1a0ca433",
+      "name": "Auto-aprovar asset",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3120,
+        160
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Convergir origem do asset').item.json;\nconst knownTokens = {\n  '1058341297366140': 'COLOQUE_O_TOKEN_DA_PAGE_PET_AQUI',\n  '472039546624261': 'COLOQUE_O_TOKEN_DA_PAGE_CELULAR_AQUI',\n  '607774492681517': 'COLOQUE_O_TOKEN_DA_PAGE_VEICULO_AQUI',\n  '301459970061606': 'COLOQUE_O_TOKEN_DA_PAGE_BICICLETA_AQUI',\n  '229182413876628': 'COLOQUE_O_TOKEN_DA_PAGE_GERAL_PROTECT_AQUI',\n  '17841416288148947': 'COLOQUE_O_TOKEN_DO_INSTAGRAM_AQUI'\n};\nreturn [{\n  json: Object.assign({}, ctx, { known_tokens: knownTokens }),\n  binary: $input.first().binary\n}];"
+      },
+      "id": "56396ebf-c800-4a6c-abf9-e4f3530c88ef",
+      "name": "Montar mapa de tokens conhecidos (PENDENTE — ver sticky)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "default_targets",
+        "include": "allOtherFields",
+        "options": {
+          "destinationFieldName": "target"
+        }
+      },
+      "id": "63776dcd-665e-470c-bac8-61bb0edb5c43",
+      "name": "Explodir alvos de publicação",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        3600,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.target.platform }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "facebook"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.target.platform }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "instagram"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Plataforma não suportada"
+        }
+      },
+      "id": "ed9a3baf-2e15-466a-b349-4308d516fe20",
+      "name": "Rotear por plataforma",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        3840,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/{{ $json.target.accountRef }}/photos",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $json.known_tokens[$json.target.accountRef] }}"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "source",
+              "inputDataFieldName": "image"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.caption }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ea0f4cdc-af7d-46a6-8b83-ba14232042c1",
+      "name": "Publicar foto no Facebook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into media_targets (media_asset_id, platform, placement, account_ref, aspect_ratio, caption, status, external_post_id, published_at)\nvalues ('{{ $('Explodir alvos de publicação').item.json.asset_id }}', 'facebook', '{{ $('Explodir alvos de publicação').item.json.target.placement }}', '{{ $('Explodir alvos de publicação').item.json.target.accountRef }}', '{{ $('Explodir alvos de publicação').item.json.target.aspectRatio }}', '{{ $('Explodir alvos de publicação').item.json.caption.replace(/'/g, \"''\") }}', 'published', '{{ $json.id || $json.post_id }}', now())\nreturning id;",
+        "options": {}
+      },
+      "id": "068af618-f639-48fb-87a7-a0624ac3ead5",
+      "name": "Registrar media_target (Facebook)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4320,
+        0
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{ $json.target.accountRef }}/media",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "=https://pub-a83994ac58034799aad260beb4d55fa3.r2.dev/{{ $json.storage_key }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.caption }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $json.known_tokens[$json.target.accountRef] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7421c594-40c5-4366-938d-b433e08be117",
+      "name": "Criar container Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4080,
+        320
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1d9b3f0c-3758-4d9e-a472-68881ee2db6b",
+      "name": "Aguardar processamento do container",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4320,
+        320
+      ],
+      "webhookId": "140cdf7d-57be-404b-942e-90784d8ca7f5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{ $('Explodir alvos de publicação').item.json.target.accountRef }}/media_publish",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('Criar container Instagram').item.json.id }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Explodir alvos de publicação').item.json.known_tokens[$('Explodir alvos de publicação').item.json.target.accountRef] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1cedf18a-6f59-42ae-881b-1188b32b2ea5",
+      "name": "Publicar Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4560,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into media_targets (media_asset_id, platform, placement, account_ref, aspect_ratio, caption, status, external_post_id, published_at)\nvalues ('{{ $('Explodir alvos de publicação').item.json.asset_id }}', 'instagram', '{{ $('Explodir alvos de publicação').item.json.target.placement }}', '{{ $('Explodir alvos de publicação').item.json.target.accountRef }}', '{{ $('Explodir alvos de publicação').item.json.target.aspectRatio }}', '{{ $('Explodir alvos de publicação').item.json.caption.replace(/'/g, \"''\") }}', 'published', '{{ $json.id }}', now())\nreturning id;",
+        "options": {}
+      },
+      "id": "41ba0d00-1069-4bc2-b707-953df3230e48",
+      "name": "Registrar media_target (Instagram)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4800,
+        320
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "id": "dca73c0c-f655-4cf6-a3d4-59b2a5fb8edc",
+      "name": "Plataforma não suportada",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        608
+      ]
+    }
+  ],
+  "connections": {
+    "Cron (5 dias)": {
+      "main": [
+        [
+          {
+            "node": "Buscar persona ativa + asset pendente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar persona ativa + asset pendente": {
+      "main": [
+        [
+          {
+            "node": "Selecionar persona e decidir origem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Selecionar persona e decidir origem": {
+      "main": [
+        [
+          {
+            "node": "Tem asset manual pendente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem asset manual pendente?": {
+      "main": [
+        [
+          {
+            "node": "Baixar asset manual do R2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gerar texto do post (GPT-4o-mini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar asset manual do R2": {
+      "main": [
+        [
+          {
+            "node": "Preparar contexto (asset manual)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar contexto (asset manual)": {
+      "main": [
+        [
+          {
+            "node": "Convergir origem do asset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convergir origem do asset": {
+      "main": [
+        [
+          {
+            "node": "Requer aprovação humana?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar texto do post (GPT-4o-mini)": {
+      "main": [
+        [
+          {
+            "node": "Extrair texto e visual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair texto e visual": {
+      "main": [
+        [
+          {
+            "node": "Gerar imagem (gpt-image-1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar imagem (gpt-image-1)": {
+      "main": [
+        [
+          {
+            "node": "Decodificar imagem e montar storage_key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decodificar imagem e montar storage_key": {
+      "main": [
+        [
+          {
+            "node": "Subir asset pro R2 (IA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir asset pro R2 (IA)": {
+      "main": [
+        [
+          {
+            "node": "Registrar media_assets (IA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar media_assets (IA)": {
+      "main": [
+        [
+          {
+            "node": "Preparar contexto (asset IA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar contexto (asset IA)": {
+      "main": [
+        [
+          {
+            "node": "Convergir origem do asset",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Requer aprovação humana?": {
+      "main": [
+        [
+          {
+            "node": "Aguardando aprovação manual (sem publicar)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auto-aprovar asset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-aprovar asset": {
+      "main": [
+        [
+          {
+            "node": "Montar mapa de tokens conhecidos (PENDENTE — ver sticky)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar mapa de tokens conhecidos (PENDENTE — ver sticky)": {
+      "main": [
+        [
+          {
+            "node": "Explodir alvos de publicação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explodir alvos de publicação": {
+      "main": [
+        [
+          {
+            "node": "Rotear por plataforma",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotear por plataforma": {
+      "main": [
+        [
+          {
+            "node": "Publicar foto no Facebook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Criar container Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Plataforma não suportada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar foto no Facebook": {
+      "main": [
+        [
+          {
+            "node": "Registrar media_target (Facebook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar container Instagram": {
+      "main": [
+        [
+          {
+            "node": "Aguardar processamento do container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar processamento do container": {
+      "main": [
+        [
+          {
+            "node": "Publicar Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar Instagram": {
+      "main": [
+        [
+          {
+            "node": "Registrar media_target (Instagram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "pinData": {}
+}
