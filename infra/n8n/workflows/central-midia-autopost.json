@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Central de Mídia — AutoPost multi-conta (CÓPIA DE TESTE, NÃO ATIVA)\n\nGeneraliza \"Backfindr AutoPost — Facebook\" pra ler contas de `media_personas` (Supabase do m2r-media) em vez de nichos/Page IDs hardcoded. NÃO tocar no workflow de produção original — esta é uma cópia isolada.\n\n**⚠️ 5 nodes Postgres foram DESATIVADOS de propósito** (Buscar persona ativa, Registrar media_assets IA, Auto-aprovar asset, Registrar media_target Facebook/Instagram): a criação automática do workflow atribuiu a credencial errada a eles (\"Postgres account\", que é do Backfindr) em vez de apontar pro banco novo do m2r-media. Reativar só depois de trocar a credencial de cada um pra uma que aponte pro projeto Supabase `m2r-media` (host/porta/user/senha — no painel Supabase, projeto `m2r-media`, ref `giwhpnrxvfzvsohsmbew`).\n\n**Antes de ativar, preencher:**\n1. Credencial Postgres correta (m2r-media) nos 5 nodes desativados acima, depois reativar cada um.\n2. Node \"Montar mapa de tokens conhecidos\" — colar os tokens reais do Meta (mesmos já usados no workflow original). Melhor ainda: mover pro cofre de credenciais do n8n de vez (pendência de segurança já registrada em BACKFINDR.md §17) — inclui agora também o token da página Backfindr/ex-Webjetos (mesmo token já usado por geral/protect, sem gerar nada novo).\n3. Credenciais \"OpenAI account\" e \"S3 account\" já foram atribuídas certas (mesmas do workflow original) — só confirmar.\n\n**Como funciona:** sorteia 1 persona com `default_targets` preenchido — hoje as 7 personas de referência do Backfindr (6 de nicho + 1 de marca, `backfindr`, adicionada 31/08/2026 — mesma Página já usada por geral/protect, só renomeada pra \"Backfindr\"). Jack Chicken/Dona Arlinda/Mestre ficam de fora do sorteio até Marcos conectar as páginas, sem precisar mexer neste workflow. Se já existe um asset `manual_upload` pendente pra essa persona, publica ele; senão gera via IA (persona `backfindr` usa o mesmo estilo de conteúdo de `geral`). Respeita `requires_approval` por persona antes de publicar. Publica em cada alvo de `default_targets` (Facebook e/ou Instagram).",
+        "content": "## Central de Mídia — AutoPost multi-conta (CÓPIA DE TESTE, NÃO ATIVA)\n\nGeneraliza \"Backfindr AutoPost — Facebook\" pra ler contas de `media_personas` (Supabase do m2r-media) em vez de nichos/Page IDs hardcoded. NÃO tocar no workflow de produção original — esta é uma cópia isolada.\n\n**Os 5 nodes Postgres usam a credencial `m2r-media Postgres`** (Supabase, projeto `m2r-media`, ref `giwhpnrxvfzvsohsmbew`, via Session pooler — conexao direta e IPv6 e o Railway sai por IPv4). Atribuida manualmente node a node em 03/09/2026 no servidor proprio; NAO confiar na atribuicao automatica do n8n, que ja errou uma vez apontando para a credencial do Backfindr.\n\n**Antes de ativar, preencher:**\n1. Senha da credencial `m2r-media Postgres` — unico campo em branco. Sem ela os 5 nodes Postgres falham.\n2. Node \"Montar mapa de tokens conhecidos\" — colar os tokens reais do Meta (mesmos já usados no workflow original). Melhor ainda: mover pro cofre de credenciais do n8n de vez (pendência de segurança já registrada em BACKFINDR.md §17) — inclui agora também o token da página Backfindr/ex-Webjetos (mesmo token já usado por geral/protect, sem gerar nada novo).\n3. Credenciais \"OpenAI account\" e \"S3 account\" já foram atribuídas certas (mesmas do workflow original) — só confirmar.\n\n**Como funciona:** sorteia 1 persona com `default_targets` preenchido — hoje as 7 personas de referência do Backfindr (6 de nicho + 1 de marca, `backfindr`, adicionada 31/08/2026 — mesma Página já usada por geral/protect, só renomeada pra \"Backfindr\"). Jack Chicken/Dona Arlinda/Mestre ficam de fora do sorteio até Marcos conectar as páginas, sem precisar mexer neste workflow. Se já existe um asset `manual_upload` pendente pra essa persona, publica ele; senão gera via IA (persona `backfindr` usa o mesmo estilo de conteúdo de `geral`). Respeita `requires_approval` por persona antes de publicar. Publica em cada alvo de `default_targets` (Facebook e/ou Instagram).",
         "height": 200,
         "width": 780,
         "color": 5
@@ -49,8 +49,7 @@
       "position": [
         240,
         0
-      ],
-      "disabled": true
+      ]
     },
     {
       "parameters": {
@@ -248,8 +247,7 @@
       "position": [
         2160,
         160
-      ],
-      "disabled": true
+      ]
     },
     {
       "parameters": {
@@ -320,8 +318,7 @@
       "position": [
         3120,
         160
-      ],
-      "disabled": true
+      ]
     },
     {
       "parameters": {
@@ -462,8 +459,7 @@
       "position": [
         4320,
         0
-      ],
-      "disabled": true
+      ]
     },
     {
       "parameters": {
@@ -552,8 +548,7 @@
       "position": [
         4800,
         320
-      ],
-      "disabled": true
+      ]
     },
     {
       "parameters": {},
