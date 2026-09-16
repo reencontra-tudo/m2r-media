@@ -444,7 +444,8 @@
       "position": [
         4080,
         0
-      ]
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -533,7 +534,8 @@
       "position": [
         4560,
         320
-      ]
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -618,6 +620,66 @@
       "parameters": {
         "operation": "executeQuery",
         "query": "insert into events (type, product, entity_type, entity_id, actor_type, actor_id, payload, metadata)\nvalues ('media_published', '{{ $('Selecionar persona e decidir origem').item.json.product_slug }}', 'media_target', '{{ $json.id }}', 'bot', 'media-hub-autopilot', jsonb_build_object('mediaAssetId','{{ $('Explodir alvos de publicação').item.json.asset_id }}','mediaTargetId','{{ $json.id }}','platform','instagram','accountRef','{{ $('Explodir alvos de publicação').item.json.target.accountRef }}','externalPostId','{{ $('Publicar Instagram').item.json.id }}'), jsonb_build_object('emitter','m2r-media','workflowId','QCFwvx4SQVJyzUL6'));",
+        "options": {}
+      }
+    },
+    {
+      "id": "2657eb7f-2a26-41e3-acca-790f947742fe",
+      "name": "Registrar falha (Facebook)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2600,
+        900
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into media_targets (media_asset_id, platform, placement, account_ref, aspect_ratio, caption, status, last_error)\nvalues ('{{ $('Explodir alvos de publicação').item.json.asset_id }}', 'facebook', '{{ $('Explodir alvos de publicação').item.json.target.placement }}', '{{ $('Explodir alvos de publicação').item.json.target.accountRef }}', '{{ $('Explodir alvos de publicação').item.json.target.aspectRatio }}', '{{ $('Explodir alvos de publicação').item.json.caption.replace(/'/g, \"''\") }}', 'failed', '{{ String(($json.error && ($json.error.message || $json.error)) || 'erro desconhecido').slice(0,500).replace(/'/g, \"''\") }}')\nreturning id;",
+        "options": {}
+      }
+    },
+    {
+      "id": "8c016cae-dc4d-418c-b9d9-315f9ce270e0",
+      "name": "Emitir media_publish_failed (Facebook)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2840,
+        900
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into events (type, product, entity_type, entity_id, actor_type, actor_id, payload, metadata)\nvalues ('media_publish_failed', '{{ $('Selecionar persona e decidir origem').item.json.product_slug }}', 'media_target', '{{ $json.id }}', 'bot', 'media-hub-autopilot',\n  jsonb_build_object('mediaAssetId','{{ $('Explodir alvos de publicação').item.json.asset_id }}','mediaTargetId','{{ $json.id }}','platform','facebook','motivo','{{ String(($json.error && ($json.error.message || $json.error)) || 'erro desconhecido').slice(0,500).replace(/'/g, \"''\") }}'), jsonb_build_object('emitter','m2r-media','workflowId','QCFwvx4SQVJyzUL6'));",
+        "options": {}
+      }
+    },
+    {
+      "id": "8ad43ad8-9960-434e-bf7a-70dcc08a669e",
+      "name": "Registrar falha (Instagram)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2600,
+        1180
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into media_targets (media_asset_id, platform, placement, account_ref, aspect_ratio, caption, status, last_error)\nvalues ('{{ $('Explodir alvos de publicação').item.json.asset_id }}', 'instagram', '{{ $('Explodir alvos de publicação').item.json.target.placement }}', '{{ $('Explodir alvos de publicação').item.json.target.accountRef }}', '{{ $('Explodir alvos de publicação').item.json.target.aspectRatio }}', '{{ $('Explodir alvos de publicação').item.json.caption.replace(/'/g, \"''\") }}', 'failed', '{{ String(($json.error && ($json.error.message || $json.error)) || 'erro desconhecido').slice(0,500).replace(/'/g, \"''\") }}')\nreturning id;",
+        "options": {}
+      }
+    },
+    {
+      "id": "b50ba363-bf97-4e07-9e6a-55e107ed71b5",
+      "name": "Emitir media_publish_failed (Instagram)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2840,
+        1180
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into events (type, product, entity_type, entity_id, actor_type, actor_id, payload, metadata)\nvalues ('media_publish_failed', '{{ $('Selecionar persona e decidir origem').item.json.product_slug }}', 'media_target', '{{ $json.id }}', 'bot', 'media-hub-autopilot',\n  jsonb_build_object('mediaAssetId','{{ $('Explodir alvos de publicação').item.json.asset_id }}','mediaTargetId','{{ $json.id }}','platform','instagram','motivo','{{ String(($json.error && ($json.error.message || $json.error)) || 'erro desconhecido').slice(0,500).replace(/'/g, \"''\") }}'), jsonb_build_object('emitter','m2r-media','workflowId','QCFwvx4SQVJyzUL6'));",
         "options": {}
       }
     }
@@ -878,6 +940,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Registrar falha (Facebook)",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -911,6 +980,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Registrar falha (Instagram)",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -930,6 +1006,28 @@
         [
           {
             "node": "Emitir media_published (Instagram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar falha (Facebook)": {
+      "main": [
+        [
+          {
+            "node": "Emitir media_publish_failed (Facebook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar falha (Instagram)": {
+      "main": [
+        [
+          {
+            "node": "Emitir media_publish_failed (Instagram)",
             "type": "main",
             "index": 0
           }
