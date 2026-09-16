@@ -560,6 +560,66 @@
         4080,
         608
       ]
+    },
+    {
+      "id": "c6ff650c-e836-48bf-b159-95a30f9ee4ce",
+      "name": "Emitir media_generated",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        520
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into events (type, product, entity_type, entity_id, actor_type, actor_id, payload, metadata)\nvalues ('media_generated', '{{ $('Selecionar persona e decidir origem').item.json.product_slug }}', 'media_asset', '{{ $('Decodificar imagem e montar storage_key').item.json.asset_id }}', 'bot', 'media-hub-autopilot', jsonb_build_object('mediaAssetId','{{ $('Decodificar imagem e montar storage_key').item.json.asset_id }}','productSlug','{{ $('Selecionar persona e decidir origem').item.json.product_slug }}','personaSlug','{{ $('Selecionar persona e decidir origem').item.json.persona_slug }}','category','{{ $('Decodificar imagem e montar storage_key').item.json.category }}','mediaType','image','generationSource','{{ $('Decodificar imagem e montar storage_key').item.json.source }}'), jsonb_build_object('emitter','m2r-media','workflowId','QCFwvx4SQVJyzUL6'));",
+        "options": {}
+      }
+    },
+    {
+      "id": "32128704-27f3-4cb4-8724-d21fc182a990",
+      "name": "Emitir media_approved",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        720
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into events (type, product, entity_type, entity_id, actor_type, actor_id, payload, metadata)\nvalues ('media_approved', '{{ $('Selecionar persona e decidir origem').item.json.product_slug }}', 'media_asset', '{{ $('Convergir origem do asset').item.json.asset_id }}', 'bot', 'media-hub-autopilot', jsonb_build_object('mediaAssetId','{{ $('Convergir origem do asset').item.json.asset_id }}','approvedBy','media-hub-autopilot'), jsonb_build_object('emitter','m2r-media','workflowId','QCFwvx4SQVJyzUL6'));",
+        "options": {}
+      }
+    },
+    {
+      "id": "05ce5ff8-3aed-464e-8ff4-56877257ee3a",
+      "name": "Emitir media_published (Facebook)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2600,
+        360
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into events (type, product, entity_type, entity_id, actor_type, actor_id, payload, metadata)\nvalues ('media_published', '{{ $('Selecionar persona e decidir origem').item.json.product_slug }}', 'media_target', '{{ $json.id }}', 'bot', 'media-hub-autopilot', jsonb_build_object('mediaAssetId','{{ $('Explodir alvos de publicação').item.json.asset_id }}','mediaTargetId','{{ $json.id }}','platform','facebook','accountRef','{{ $('Explodir alvos de publicação').item.json.target.accountRef }}','externalPostId','{{ $('Publicar foto no Facebook').item.json.id }}'), jsonb_build_object('emitter','m2r-media','workflowId','QCFwvx4SQVJyzUL6'));",
+        "options": {}
+      }
+    },
+    {
+      "id": "df5cdfab-e2f5-464a-9a10-6f2446fd9efe",
+      "name": "Emitir media_published (Instagram)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2600,
+        640
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into events (type, product, entity_type, entity_id, actor_type, actor_id, payload, metadata)\nvalues ('media_published', '{{ $('Selecionar persona e decidir origem').item.json.product_slug }}', 'media_target', '{{ $json.id }}', 'bot', 'media-hub-autopilot', jsonb_build_object('mediaAssetId','{{ $('Explodir alvos de publicação').item.json.asset_id }}','mediaTargetId','{{ $json.id }}','platform','instagram','accountRef','{{ $('Explodir alvos de publicação').item.json.target.accountRef }}','externalPostId','{{ $('Publicar Instagram').item.json.id }}'), jsonb_build_object('emitter','m2r-media','workflowId','QCFwvx4SQVJyzUL6'));",
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -709,6 +769,11 @@
             "node": "Preparar contexto (asset IA)",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Emitir media_generated",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -747,6 +812,11 @@
         [
           {
             "node": "Montar mapa de tokens conhecidos (PENDENTE — ver sticky)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Emitir media_approved",
             "type": "main",
             "index": 0
           }
@@ -838,6 +908,28 @@
         [
           {
             "node": "Registrar media_target (Instagram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar media_target (Facebook)": {
+      "main": [
+        [
+          {
+            "node": "Emitir media_published (Facebook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar media_target (Instagram)": {
+      "main": [
+        [
+          {
+            "node": "Emitir media_published (Instagram)",
             "type": "main",
             "index": 0
           }
