@@ -33,4 +33,23 @@ COPY --from=gosu /gosu /usr/local/bin/gosu
 COPY infra/n8n/docker-entrypoint.sh /m2r-entrypoint.sh
 RUN chmod +x /m2r-entrypoint.sh
 
+# Certificado raiz da Supabase (Supabase Root 2021 CA).
+#
+# Sem ele, conectar no Postgres do m2r-media falha com "self-signed certificate in
+# certificate chain": a cadeia do pooler e assinada por uma CA propria da Supabase, que
+# o Node nao conhece. A saida comum e ligar "Ignore SSL Issues" na credencial, o que
+# mantem o trafego cifrado mas para de verificar QUEM emitiu o certificado — ou seja,
+# aceita qualquer interceptador no caminho. Instalar a CA resolve a causa e preserva a
+# verificacao completa.
+#
+# Procedencia conferida, nao baixada as cegas: o arquivo veio de
+# supabase-downloads.s3.amazonaws.com/prod/ssl/prod-ca-2021.crt e o fingerprint SHA-256
+# foi comparado com o root que o proprio pooler apresenta em
+# aws-0-us-west-2.pooler.supabase.com:5432 (openssl s_client -starttls postgres).
+# Os dois batem: 80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:
+#                82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA
+# Valido ate 26/04/2031. Ao trocar este arquivo, refazer essa comparacao.
+COPY infra/n8n/certs/supabase-root-2021-ca.crt /opt/certs/supabase-root-2021-ca.crt
+ENV NODE_EXTRA_CA_CERTS=/opt/certs/supabase-root-2021-ca.crt
+
 ENTRYPOINT ["/m2r-entrypoint.sh"]
